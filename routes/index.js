@@ -51,34 +51,32 @@ router.get('/map', function (req, res) {
 });
 
 /* GET pg json data. */
-//Recoge una petición GET de tipo http://localhost:3000/satellites?id=DEIMOS1
+//http://localhost:3000/satellites/('SENTINEL2','LANDSAT8')
 router.get('/satellites/:sats', function (req, res) {
     if (req.params.sats) {
+
+        console.log(req.params.sats);
         var client = new pg.Client(conString);
         client.connect();
 
-        console.log(req.params.sats);
-
-        var query = client.query("SELECT id_product,satellite FROM \"CT_products\" WHERE satellite IN " + req.params.sats + "");
-        query.on("row", function (row, result) {
-            result.addRow(row);
-        });
-        query.on("end", function (result) {
-            res.send(result.rows);
-            satelites = result.rows;
+        client.query("SELECT id_product, satellite FROM \"CT_products\" WHERE satellite IN " + req.params.sats + ";", (err, response) => {
+            console.log(response);
+            res.send(response.rows[0]);
+            satelites = response.rows[0];
             console.log(satelites);
-            res.end();
-        });
+            client.end()
+        })
     } else {
         res.status(404) // HTTP status 404: NotFound
             .send('Not found');
     }
 
-    // obtieneIds();
+     obtieneIds();
 });
 
 
 //petición principal que recoge la consulta según las coordenadas del BBOX
+//'pg/-3.5/40/-2.5/41/3857";
 router.get('/pg/:xmin/:ymin/:xmax/:ymax/:srid', function (req, res) {
     if (req.params.xmin) {
         var client = new pg.Client(conString);
@@ -89,21 +87,28 @@ router.get('/pg/:xmin/:ymin/:xmax/:ymax/:srid', function (req, res) {
         var ymax = req.params.ymax;
         var srid = req.params.srid;
 
-        if (req.param('sats')) {
-            obtieneIds();
-            var query = client.query("SELECT row_to_json(fc) " + "FROM ( SELECT 'FeatureCollection' As type, array_to_json(array_agg(f)) As features " + "FROM (SELECT 'Feature' As type " + ", ST_AsGeoJSON(lg.geom)::json As geometry " + ", row_to_json(lp) As properties " + "FROM \"CT_images\" As lg " + "INNER JOIN (select id_image, fileidentifier, pathtofile, datecaptured fecha_captura FROM \"CT_images\"" + " where (st_overlaps(geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326)) OR " + " ST_Within (geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326))) AND " + " (datecaptured between to_date('" + time_ini + "','YYYYMMDD') and to_date('" + time_fin + "','YYYYMMDD')) AND id_product IN " + id_satelites + " order by datecaptured)  As lp " + "ON lg.id_image = lp.id_image  ) As f )  As fc");
+        if (req.param('srid')) {
+            //obtieneIds();
+            var query = "SELECT row_to_json(fc) " + "FROM ( SELECT 'FeatureCollection' As type, array_to_json(array_agg(f)) As features " + "FROM (SELECT 'Feature' As type " + ", ST_AsGeoJSON(lg.geom)::json As geometry " + ", row_to_json(lp) As properties " + "FROM \"CT_images\" As lg " + "INNER JOIN (select id_image, fileidentifier, pathtofile, datecaptured fecha_captura FROM \"CT_images\"" + " where (st_overlaps(geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326)) OR " + " ST_Within (geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326))) AND " + " (datecaptured between to_date('" + time_ini + "','YYYYMMDD') and to_date('" + time_fin + "','YYYYMMDD')) AND id_product IN " + id_satelites + " order by datecaptured)  As lp " + "ON lg.id_image = lp.id_image  ) As f )  As fc;";
         } else {
-            var query = client.query("SELECT row_to_json(fc) " + "FROM ( SELECT 'FeatureCollection' As type, array_to_json(array_agg(f)) As features " + "FROM (SELECT 'Feature' As type " + ", ST_AsGeoJSON(lg.geom)::json As geometry " + ", row_to_json(lp) As properties " + "FROM \"CT_images\" As lg " + "INNER JOIN (select id_image, fileidentifier, pathtofile, datecaptured fecha_captura FROM \"CT_images\"" + " where (st_overlaps(geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326)) OR " + " ST_Within (geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326))) AND " + " (datecaptured between to_date('" + time_ini + "','YYYYMMDD') and to_date('" + time_fin + "','YYYYMMDD')) order by datecaptured)  As lp " + "ON lg.id_image = lp.id_image  ) As f )  As fc");
+            var query = "SELECT row_to_json(fc) " + "FROM ( SELECT 'FeatureCollection' As type, array_to_json(array_agg(f)) As features " + "FROM (SELECT 'Feature' As type " + ", ST_AsGeoJSON(lg.geom)::json As geometry " + ", row_to_json(lp) As properties " + "FROM \"CT_images\" As lg " + "INNER JOIN (select id_image, fileidentifier, pathtofile, datecaptured fecha_captura FROM \"CT_images\"" + " where (st_overlaps(geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326)) OR " + " ST_Within (geom, st_transform(st_makeEnvelope(" + xmin + "," + ymin + "," + xmax + "," + ymax + "," + srid + "),4326))) AND " + " (datecaptured between to_date('" + time_ini + "','YYYYMMDD') and to_date('" + time_fin + "','YYYYMMDD')) order by datecaptured)  As lp " + "ON lg.id_image = lp.id_image  ) As f )  As fc;";
         }
         ;
 
+        client.query(query, (err, response) => {
+            //console.log(response);
+            res.send(response.rows);
+            client.end()
+        })
+
+        /*
         query.on("row", function (row, result) {
             result.addRow(row);
         });
         query.on("end", function (result) {
             res.send(result.rows[0].row_to_json);
             res.end();
-        });
+        });*/
     } else {
         res.status(404) // HTTP status 404: NotFound
             .send('Not found');
@@ -118,6 +123,15 @@ router.get('/time/:time_ini/:time_fin', function (req, res) {
         time_ini = req.params.time_ini;
         time_fin = req.params.time_fin;
 
+        var query = "select * from \"CT_images\" where datecaptured between to_date('" + time_ini + "','YYYYMMDD') and to_date('" + time_fin + "','YYYYMMDD') order by datecaptured;";
+
+        console.log(query);
+        client.query(query, (err, response) => {
+            //console.log(response.rows);
+            res.send(response.rows);
+            client.end()
+        })
+        /*
         var query = client.query("select * from \"CT_images\" where datecaptured between to_date('" + time_ini + "','YYYYMMDD') and to_date('" + time_fin + "','YYYYMMDD') order by datecaptured");
         query.on("row", function (row, result) {
             result.addRow(row);
@@ -126,6 +140,7 @@ router.get('/time/:time_ini/:time_fin', function (req, res) {
             res.send(result.rows);
             res.end();
         });
+        */
     } else {
         res.status(404) // HTTP status 404: NotFound
             .send('Not found');
